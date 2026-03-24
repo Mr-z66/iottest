@@ -2,7 +2,7 @@
 #define DS18B20_SENSOR_H
 
 #include <Arduino.h>
-#include "config.h"
+#include "core/config.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
 

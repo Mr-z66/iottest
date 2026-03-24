@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <BH1750.h>
 #include <Wire.h>
-#include "config.h"
+#include "core/config.h"
 
 #define SENSOR_OK 1
 #define SENSOR_ERROR 0

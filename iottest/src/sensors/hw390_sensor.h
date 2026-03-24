@@ -2,7 +2,7 @@
 #define HW390_SENSOR_H
 
 #include <Arduino.h>
-#include "config.h"
+#include "core/config.h"
 
 // ============================================
 // HW-390 土壤湿度传感器 - 面向对象设计

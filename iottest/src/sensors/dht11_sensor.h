@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 #include <DHT.h>
-#include "config.h"
+#include "core/config.h"
 
 // ============================================
 // DHT11 传感器模块

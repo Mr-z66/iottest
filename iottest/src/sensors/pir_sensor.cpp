@@ -1,4 +1,4 @@
-#include "pir_sensor.h"
+#include "sensors/pir_sensor.h"
 
 PIRSensor::PIRSensor(int digitalPin)
     : pin(digitalPin), motionDetected(false), digitalValue(LOW) {

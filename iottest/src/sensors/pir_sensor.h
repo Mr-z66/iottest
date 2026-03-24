@@ -2,7 +2,7 @@
 #define PIR_SENSOR_H
 
 #include <Arduino.h>
-#include "config.h"
+#include "core/config.h"
 
 #define SENSOR_OK 1
 #define SENSOR_ERROR 0

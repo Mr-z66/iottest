@@ -1,4 +1,4 @@
-#include "sgp30_sensor.h"
+#include "sensors/sgp30_sensor.h"
 
 // SGP30传感器对象（全局单例）
 static Adafruit_SGP30 sgp;

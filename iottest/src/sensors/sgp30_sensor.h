@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 #include <Adafruit_SGP30.h>
-#include "config.h"
+#include "core/config.h"
 
 // ============================================
 // SGP30 传感器模块

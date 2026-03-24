@@ -2,7 +2,7 @@
 #define RAIN_SENSOR_H
 
 #include <Arduino.h>
-#include "config.h"
+#include "core/config.h"
 
 // ============================================
 // MH-RD 雨滴传感器 - 面向对象设计

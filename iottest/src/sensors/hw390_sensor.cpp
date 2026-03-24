@@ -1,4 +1,4 @@
-#include "hw390_sensor.h"
+#include "sensors/hw390_sensor.h"
 
 // ============================================
 // 全局实例（用于C风格API的后向兼容）

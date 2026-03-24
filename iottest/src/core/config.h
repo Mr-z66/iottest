@@ -1,0 +1,61 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// Serial
+#define SERIAL_BAUD_RATE 115200
+
+// Wi-Fi / gateway
+#define WIFI_SSID "your-ssid"
+#define WIFI_PASSWORD "your-password"
+#define WIFI_CONNECT_TIMEOUT_MS 3000
+#define WIFI_RECONNECT_INTERVAL_MS 5000
+#define GATEWAY_ID "esp-gateway-001"
+#define FIRMWARE_VERSION "1.2.0"
+#define GATEWAY_HTTP_PORT 8080
+#define GATEWAY_WS_PORT 8081
+#define GATEWAY_WS_PATH "/ws"
+#define COMMAND_IDEMPOTENT_WINDOW_MS 30000UL
+
+// NTP
+#define NTP_SERVER_PRIMARY "pool.ntp.org"
+#define NTP_SERVER_SECONDARY "ntp.aliyun.com"
+#define GMT_OFFSET_SECONDS 0
+#define DAYLIGHT_OFFSET_SECONDS 0
+
+// DHT11
+#define DHT_PIN 4
+#define DHT_TYPE DHT11
+
+// Shared I2C bus
+#define SGP30_SDA 18
+#define SGP30_SCL 19
+
+// Sensors
+#define SOIL_MOISTURE_PIN 34
+#define RAIN_SENSOR_PIN 13
+#define PIR_SENSOR_PIN 14
+#define DS18B20_PIN 5
+#define DS18B20_ADDRESS 0x28
+
+// I2C addresses
+#define SGP30_I2C_ADDRESS 0x58
+#define GY302_SDA SGP30_SDA
+#define GY302_SCL SGP30_SCL
+#define GY302_I2C_ADDRESS 0x23
+
+// Actuators
+#define ENABLE_PUMP_ACTUATOR true
+#define PUMP_RELAY_PIN 26
+#define PUMP_ACTIVE_LEVEL LOW
+#define PUMP_MAX_DURATION_SEC 60
+
+#define ENABLE_GROW_LIGHT_ACTUATOR true
+#define GROW_LIGHT_RELAY_PIN 27
+#define GROW_LIGHT_ACTIVE_LEVEL LOW
+
+// System
+#define SENSOR_READ_INTERVAL 2000
+#define TELEMETRY_PUSH_INTERVAL_MS 5000
+#define I2C_SCAN_ENABLED false
+
+#endif // CONFIG_H

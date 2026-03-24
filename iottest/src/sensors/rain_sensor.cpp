@@ -1,4 +1,4 @@
-#include "rain_sensor.h"
+#include "sensors/rain_sensor.h"
 
 // ============================================
 // RainSensor 类实现

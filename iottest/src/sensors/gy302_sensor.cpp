@@ -1,4 +1,4 @@
-#include "gy302_sensor.h"
+#include "sensors/gy302_sensor.h"
 
 GY302Sensor::GY302Sensor()
     : lightMeter(), lux(0.0f), initialized(false), dataValid(false) {

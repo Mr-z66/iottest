@@ -1,4 +1,4 @@
-#include "dht11_sensor.h"
+#include "sensors/dht11_sensor.h"
 
 // DHT传感器对象（全局单例）
 static DHT dht(DHT_PIN, DHT_TYPE);
