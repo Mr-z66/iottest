@@ -79,6 +79,7 @@ docs/
   - `telemetry.update`
   - `device.status.changed`
   - `command.result`
+- WebSocket 接入路径 `/ws`
 
 ### 控制侧
 

@@ -55,7 +55,38 @@ std::vector<ActuatorStatusSnapshot> ActuatorController::getSnapshots() const {
 }
 
 bool ActuatorController::hasDevice(const String& deviceId) const {
-    return deviceId == pump.id || deviceId == growLight.id;
+    return findActuator(deviceId) != nullptr;
+}
+
+bool ActuatorController::validateCommand(const CommandRequest& request, String& errorMessage) const {
+    const ActuatorStatusSnapshot* actuator = findActuator(request.deviceId);
+    if (actuator == nullptr || !actuator->enabled || !actuator->online) {
+        errorMessage = "device offline or not found";
+        return false;
+    }
+
+    if (request.command != "TURN_ON" && request.command != "TURN_OFF") {
+        errorMessage = "unsupported command";
+        return false;
+    }
+
+    if (request.hasLevel) {
+        errorMessage = "level is not supported";
+        return false;
+    }
+
+    if (request.deviceId == pump.id) {
+        if (request.hasDurationSec && request.durationSec < 0) {
+            errorMessage = "durationSec must be >= 0";
+            return false;
+        }
+    } else if (request.hasDurationSec) {
+        errorMessage = "durationSec is only supported by pump";
+        return false;
+    }
+
+    errorMessage = "";
+    return true;
 }
 
 bool ActuatorController::executeCommand(const CommandRequest& request, CommandResult& result) {
@@ -63,11 +94,11 @@ bool ActuatorController::executeCommand(const CommandRequest& request, CommandRe
     result.deviceId = request.deviceId;
     result.timestamp = TimeUtils::iso8601Now();
 
-    ActuatorStatusSnapshot* actuator = findActuator(request.deviceId);
-    if (actuator == nullptr || !actuator->enabled) {
+    String errorMessage;
+    if (!validateCommand(request, errorMessage)) {
         result.result = "FAILED";
-        result.finalStatus = "OFFLINE";
-        result.message = "device not found or disabled";
+        result.finalStatus = "INVALID";
+        result.message = errorMessage;
         return false;
     }
 
@@ -76,8 +107,9 @@ bool ActuatorController::executeCommand(const CommandRequest& request, CommandRe
             writePump(true);
             if (request.hasDurationSec) {
                 int clampedDuration = request.durationSec;
-                if (clampedDuration < 0) clampedDuration = 0;
-                if (clampedDuration > PUMP_MAX_DURATION_SEC) clampedDuration = PUMP_MAX_DURATION_SEC;
+                if (clampedDuration > PUMP_MAX_DURATION_SEC) {
+                    clampedDuration = PUMP_MAX_DURATION_SEC;
+                }
                 pump.autoOffAtMs = millis() + (static_cast<unsigned long>(clampedDuration) * 1000UL);
             } else {
                 pump.autoOffAtMs = 0;
@@ -97,29 +129,22 @@ bool ActuatorController::executeCommand(const CommandRequest& request, CommandRe
         return true;
     }
 
-    if (request.command == "TURN_OFF") {
-        if (request.deviceId == pump.id) {
-            writePump(false);
-            pump.autoOffAtMs = 0;
-            updateTimestamp(pump);
-            result.result = "SUCCESS";
-            result.finalStatus = "OFF";
-            result.message = "pump stopped";
-            return true;
-        }
-
-        writeGrowLight(false);
-        updateTimestamp(growLight);
+    if (request.deviceId == pump.id) {
+        writePump(false);
+        pump.autoOffAtMs = 0;
+        updateTimestamp(pump);
         result.result = "SUCCESS";
         result.finalStatus = "OFF";
-        result.message = "grow light turned off";
+        result.message = "pump stopped";
         return true;
     }
 
-    result.result = "FAILED";
-    result.finalStatus = actuator->on ? "ON" : "OFF";
-    result.message = "unsupported command";
-    return false;
+    writeGrowLight(false);
+    updateTimestamp(growLight);
+    result.result = "SUCCESS";
+    result.finalStatus = "OFF";
+    result.message = "grow light turned off";
+    return true;
 }
 
 void ActuatorController::writePump(bool on) {
@@ -137,6 +162,12 @@ void ActuatorController::updateTimestamp(ActuatorStatusSnapshot& actuator) {
 }
 
 ActuatorStatusSnapshot* ActuatorController::findActuator(const String& deviceId) {
+    if (deviceId == pump.id) return &pump;
+    if (deviceId == growLight.id) return &growLight;
+    return nullptr;
+}
+
+const ActuatorStatusSnapshot* ActuatorController::findActuator(const String& deviceId) const {
     if (deviceId == pump.id) return &pump;
     if (deviceId == growLight.id) return &growLight;
     return nullptr;

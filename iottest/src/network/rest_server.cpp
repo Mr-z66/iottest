@@ -13,6 +13,7 @@ RestServer::RestServer(uint16_t port,
                        CommandTracker& commandTrackerRef,
                        WsPublisher& wsPublisherRef)
     : server(port),
+      ws(GATEWAY_WS_PATH),
       wifiManager(wifiManagerRef),
       telemetryCache(telemetryCacheRef),
       sensorCollector(sensorCollectorRef),
@@ -23,24 +24,95 @@ RestServer::RestServer(uint16_t port,
 }
 
 void RestServer::begin() {
-    server.on("/gateway/status", HTTP_GET, [this]() { handleGatewayStatus(); });
-    server.on("/telemetry/realtime", HTTP_GET, [this]() { handleTelemetryRealtime(); });
-    server.on("/devices", HTTP_GET, [this]() { handleDevices(); });
-    server.onNotFound([this]() { handleNotFound(); });
+    ws.onEvent([](AsyncWebSocket* server,
+                  AsyncWebSocketClient* client,
+                  AwsEventType type,
+                  void* arg,
+                  uint8_t* data,
+                  size_t len) {
+        (void)server;
+        (void)client;
+        (void)type;
+        (void)arg;
+        (void)data;
+        (void)len;
+    });
+    server.addHandler(&ws);
+    wsPublisher.attach(&ws);
+
+    server.on("/gateway/status", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        handleGatewayStatus(request);
+    });
+
+    server.on("/telemetry/realtime", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        handleTelemetryRealtime(request);
+    });
+
+    server.on("/devices", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        handleDevices(request);
+    });
+
+    server.on("/devices/pump-001/command", HTTP_POST,
+        [](AsyncWebServerRequest* request) {
+            (void)request;
+        },
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (index != 0 || len != total) {
+                return;
+            }
+
+            String body;
+            body.reserve(len + 1);
+            for (size_t i = 0; i < len; ++i) {
+                body += static_cast<char>(data[i]);
+            }
+            handleCommandPost(request, "pump-001", body);
+        });
+
+    server.on("/devices/growlight-001/command", HTTP_POST,
+        [](AsyncWebServerRequest* request) {
+            (void)request;
+        },
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (index != 0 || len != total) {
+                return;
+            }
+
+            String body;
+            body.reserve(len + 1);
+            for (size_t i = 0; i < len; ++i) {
+                body += static_cast<char>(data[i]);
+            }
+            handleCommandPost(request, "growlight-001", body);
+        });
+
+    server.onNotFound([this](AsyncWebServerRequest* request) {
+        if (request->method() == HTTP_GET && request->url().startsWith("/commands/")) {
+            handleCommandQuery(request, request->url().substring(String("/commands/").length()));
+            return;
+        }
+
+        AsyncWebServerResponse* response = request->beginResponse(404, "application/json",
+                                                                 "{\"code\":404,\"message\":\"not found\"}");
+        addCommonHeaders(response);
+        request->send(response);
+    });
+
     server.begin();
 }
 
 void RestServer::loop() {
-    server.handleClient();
 }
 
-void RestServer::addCommonHeaders() {
-    server.sendHeader("Access-Control-Allow-Origin", "*");
-    server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
-    server.sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+void RestServer::addCommonHeaders(AsyncWebServerResponse* response) {
+    response->addHeader("Access-Control-Allow-Origin", "*");
+    response->addHeader("Access-Control-Allow-Headers", "Content-Type");
+    response->addHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
 }
 
-void RestServer::handleGatewayStatus() {
+void RestServer::handleGatewayStatus(AsyncWebServerRequest* request) {
     GatewayStatusSnapshot snapshot = buildGatewayStatus();
 
     JsonDocument doc;
@@ -63,11 +135,13 @@ void RestServer::handleGatewayStatus() {
 
     String payload;
     serializeJson(doc, payload);
-    addCommonHeaders();
-    server.send(200, "application/json", payload);
+
+    AsyncWebServerResponse* response = request->beginResponse(200, "application/json", payload);
+    addCommonHeaders(response);
+    request->send(response);
 }
 
-void RestServer::handleTelemetryRealtime() {
+void RestServer::handleTelemetryRealtime(AsyncWebServerRequest* request) {
     const TelemetrySnapshot& snapshot = telemetryCache.getLatest();
 
     JsonDocument doc;
@@ -78,17 +152,23 @@ void RestServer::handleTelemetryRealtime() {
     if (snapshot.hasTemperature) data["temperature"] = snapshot.temperature;
     if (snapshot.hasHumidity) data["humidity"] = snapshot.humidity;
     if (snapshot.hasLight) data["light"] = snapshot.light;
-    if (snapshot.hasCo2) data["co2"] = snapshot.co2;
+    if (snapshot.hasCo2) {
+        data["co2"] = snapshot.co2;
+        data["eco2"] = snapshot.co2;
+    }
+    if (snapshot.hasTvoc) data["tvoc"] = snapshot.tvoc;
     if (snapshot.hasSoilMoisture) data["soilMoisture"] = snapshot.soilMoisture;
     data["timestamp"] = snapshot.timestamp;
 
     String payload;
     serializeJson(doc, payload);
-    addCommonHeaders();
-    server.send(200, "application/json", payload);
+
+    AsyncWebServerResponse* response = request->beginResponse(200, "application/json", payload);
+    addCommonHeaders(response);
+    request->send(response);
 }
 
-void RestServer::handleDevices() {
+void RestServer::handleDevices(AsyncWebServerRequest* request) {
     std::vector<DeviceModel> devices = buildDevices();
 
     JsonDocument doc;
@@ -124,45 +204,60 @@ void RestServer::handleDevices() {
 
     String payload;
     serializeJson(doc, payload);
-    addCommonHeaders();
-    server.send(200, "application/json", payload);
+
+    AsyncWebServerResponse* response = request->beginResponse(200, "application/json", payload);
+    addCommonHeaders(response);
+    request->send(response);
 }
 
-void RestServer::handleCommandPost(const String& deviceId) {
+void RestServer::handleCommandPost(AsyncWebServerRequest* request, const String& deviceId, const String& body) {
     JsonDocument requestDoc;
-    DeserializationError error = deserializeJson(requestDoc, server.arg("plain"));
+    DeserializationError error = deserializeJson(requestDoc, body);
     if (error) {
-        addCommonHeaders();
-        server.send(400, "application/json", "{\"code\":400,\"message\":\"invalid json\"}");
+        AsyncWebServerResponse* response = request->beginResponse(400, "application/json",
+                                                                 "{\"code\":400,\"message\":\"invalid json\"}");
+        addCommonHeaders(response);
+        request->send(response);
         return;
     }
 
-    CommandRequest request;
-    request.deviceId = deviceId;
-    request.command = requestDoc["command"] | "";
-    request.requestId = requestDoc["requestId"] | "";
+    CommandRequest commandRequest;
+    commandRequest.deviceId = deviceId;
+    commandRequest.command = requestDoc["command"] | "";
+    commandRequest.requestId = requestDoc["requestId"] | "";
 
     if (requestDoc["params"]["durationSec"].is<int>()) {
-        request.hasDurationSec = true;
-        request.durationSec = requestDoc["params"]["durationSec"].as<int>();
+        commandRequest.hasDurationSec = true;
+        commandRequest.durationSec = requestDoc["params"]["durationSec"].as<int>();
     }
 
     if (requestDoc["params"]["level"].is<int>()) {
-        request.hasLevel = true;
-        request.level = requestDoc["params"]["level"].as<int>();
+        commandRequest.hasLevel = true;
+        commandRequest.level = requestDoc["params"]["level"].as<int>();
     }
 
-    if (request.command.isEmpty() || request.requestId.isEmpty()) {
-        addCommonHeaders();
-        server.send(400, "application/json", "{\"code\":400,\"message\":\"command and requestId are required\"}");
+    if (commandRequest.command.isEmpty() || commandRequest.requestId.isEmpty()) {
+        AsyncWebServerResponse* response = request->beginResponse(
+            400, "application/json", "{\"code\":400,\"message\":\"command and requestId are required\"}");
+        addCommonHeaders(response);
+        request->send(response);
         return;
     }
 
-    if (commandTracker.hasRequest(request.requestId)) {
+    CommandDuplicateStatus duplicateStatus = commandTracker.checkDuplicate(commandRequest);
+    if (duplicateStatus == COMMAND_DUPLICATE_CONFLICT) {
+        AsyncWebServerResponse* response = request->beginResponse(
+            409, "application/json", "{\"code\":409,\"message\":\"requestId conflict\"}");
+        addCommonHeaders(response);
+        request->send(response);
+        return;
+    }
+
+    if (duplicateStatus == COMMAND_DUPLICATE_SAME) {
         JsonDocument doc;
         doc["code"] = 0;
         doc["message"] = "accepted";
-        doc["requestId"] = request.requestId;
+        doc["requestId"] = commandRequest.requestId;
         JsonObject data = doc["data"].to<JsonObject>();
         data["accepted"] = true;
         data["deviceId"] = deviceId;
@@ -170,23 +265,34 @@ void RestServer::handleCommandPost(const String& deviceId) {
 
         String payload;
         serializeJson(doc, payload);
-        addCommonHeaders();
-        server.send(202, "application/json", payload);
+
+        AsyncWebServerResponse* response = request->beginResponse(202, "application/json", payload);
+        addCommonHeaders(response);
+        request->send(response);
         return;
     }
 
-    commandTracker.recordAccepted(request.requestId, request.deviceId);
+    String errorMessage;
+    if (!actuatorController.validateCommand(commandRequest, errorMessage)) {
+        JsonDocument doc;
+        doc["code"] = 400;
+        doc["message"] = errorMessage;
 
-    CommandResult result;
-    actuatorController.executeCommand(request, result);
-    commandTracker.recordFinalResult(result);
-    wsPublisher.publishCommandResult(result);
-    wsPublisher.publishDeviceStatus(buildDevices());
+        String payload;
+        serializeJson(doc, payload);
+
+        AsyncWebServerResponse* response = request->beginResponse(400, "application/json", payload);
+        addCommonHeaders(response);
+        request->send(response);
+        return;
+    }
+
+    commandTracker.recordAccepted(commandRequest);
 
     JsonDocument doc;
     doc["code"] = 0;
     doc["message"] = "accepted";
-    doc["requestId"] = request.requestId;
+    doc["requestId"] = commandRequest.requestId;
     JsonObject data = doc["data"].to<JsonObject>();
     data["accepted"] = true;
     data["deviceId"] = deviceId;
@@ -194,15 +300,41 @@ void RestServer::handleCommandPost(const String& deviceId) {
 
     String payload;
     serializeJson(doc, payload);
-    addCommonHeaders();
-    server.send(202, "application/json", payload);
+
+    AsyncWebServerResponse* response = request->beginResponse(202, "application/json", payload);
+    addCommonHeaders(response);
+    request->send(response);
 }
 
-void RestServer::handleCommandQuery(const String& requestId) {
+void RestServer::handleCommandQuery(AsyncWebServerRequest* request, const String& requestId) {
     CommandResult result;
     if (!commandTracker.getResult(requestId, result)) {
-        addCommonHeaders();
-        server.send(404, "application/json", "{\"code\":404,\"message\":\"command result not found\"}");
+        CommandRequest accepted;
+        if (commandTracker.getAccepted(requestId, accepted)) {
+            JsonDocument acceptedDoc;
+            acceptedDoc["code"] = 0;
+            acceptedDoc["message"] = "ok";
+            JsonObject data = acceptedDoc["data"].to<JsonObject>();
+            data["requestId"] = accepted.requestId;
+            data["deviceId"] = accepted.deviceId;
+            data["result"] = "PENDING";
+            data["finalStatus"] = "ACCEPTED";
+            data["message"] = "command accepted and waiting for execution";
+            data["timestamp"] = TimeUtils::iso8601Now();
+
+            String payload;
+            serializeJson(acceptedDoc, payload);
+
+            AsyncWebServerResponse* response = request->beginResponse(200, "application/json", payload);
+            addCommonHeaders(response);
+            request->send(response);
+            return;
+        }
+
+        AsyncWebServerResponse* response = request->beginResponse(
+            404, "application/json", "{\"code\":404,\"message\":\"command result not found\"}");
+        addCommonHeaders(response);
+        request->send(response);
         return;
     }
 
@@ -220,36 +352,10 @@ void RestServer::handleCommandQuery(const String& requestId) {
 
     String payload;
     serializeJson(doc, payload);
-    addCommonHeaders();
-    server.send(200, "application/json", payload);
-}
 
-void RestServer::handleNotFound() {
-    if (server.method() == HTTP_OPTIONS) {
-        addCommonHeaders();
-        server.send(204, "text/plain", "");
-        return;
-    }
-
-    const String uri = server.uri();
-
-    if (server.method() == HTTP_POST &&
-        uri.startsWith("/devices/") &&
-        uri.endsWith("/command")) {
-        String deviceId = uri.substring(String("/devices/").length(),
-                                        uri.length() - String("/command").length());
-        handleCommandPost(deviceId);
-        return;
-    }
-
-    if (server.method() == HTTP_GET && uri.startsWith("/commands/")) {
-        String requestId = uri.substring(String("/commands/").length());
-        handleCommandQuery(requestId);
-        return;
-    }
-
-    addCommonHeaders();
-    server.send(404, "application/json", "{\"code\":404,\"message\":\"not found\"}");
+    AsyncWebServerResponse* response = request->beginResponse(200, "application/json", payload);
+    addCommonHeaders(response);
+    request->send(response);
 }
 
 GatewayStatusSnapshot RestServer::buildGatewayStatus() const {

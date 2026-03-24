@@ -2,7 +2,7 @@
 #define REST_SERVER_H
 
 #include <Arduino.h>
-#include <WebServer.h>
+#include <ESPAsyncWebServer.h>
 #include "core/gateway_models.h"
 #include "network/wifi_manager.h"
 #include "core/telemetry_cache.h"
@@ -14,7 +14,8 @@
 
 class RestServer {
 private:
-    WebServer server;
+    AsyncWebServer server;
+    AsyncWebSocket ws;
     WifiManager& wifiManager;
     TelemetryCache& telemetryCache;
     SensorCollector& sensorCollector;
@@ -23,13 +24,12 @@ private:
     CommandTracker& commandTracker;
     WsPublisher& wsPublisher;
 
-    void addCommonHeaders();
-    void handleGatewayStatus();
-    void handleTelemetryRealtime();
-    void handleDevices();
-    void handleCommandPost(const String& deviceId);
-    void handleCommandQuery(const String& requestId);
-    void handleNotFound();
+    void addCommonHeaders(AsyncWebServerResponse* response);
+    void handleGatewayStatus(AsyncWebServerRequest* request);
+    void handleTelemetryRealtime(AsyncWebServerRequest* request);
+    void handleDevices(AsyncWebServerRequest* request);
+    void handleCommandPost(AsyncWebServerRequest* request, const String& deviceId, const String& body);
+    void handleCommandQuery(AsyncWebServerRequest* request, const String& requestId);
     GatewayStatusSnapshot buildGatewayStatus() const;
     std::vector<DeviceModel> buildDevices() const;
 

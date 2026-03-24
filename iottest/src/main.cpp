@@ -7,8 +7,8 @@
 #include "core/device_registry.h"
 #include "control/actuator_controller.h"
 #include "control/command_tracker.h"
-#include "network/ws_publisher.h"
 #include "network/rest_server.h"
+#include "network/ws_publisher.h"
 
 SensorCollector sensorCollector;
 TelemetryCache telemetryCache;
@@ -16,7 +16,7 @@ DeviceRegistry deviceRegistry;
 ActuatorController actuatorController;
 CommandTracker commandTracker;
 WifiManager wifiManager(WIFI_SSID, WIFI_PASSWORD);
-WsPublisher wsPublisher(GATEWAY_WS_PORT);
+WsPublisher wsPublisher;
 RestServer restServer(GATEWAY_HTTP_PORT,
                       wifiManager,
                       telemetryCache,
@@ -51,8 +51,8 @@ void setup() {
 
     Serial.print("HTTP port: ");
     Serial.println(GATEWAY_HTTP_PORT);
-    Serial.print("WebSocket port: ");
-    Serial.println(GATEWAY_WS_PORT);
+    Serial.print("WebSocket path: ");
+    Serial.println(GATEWAY_WS_PATH);
 }
 
 void loop() {
@@ -60,6 +60,19 @@ void loop() {
     actuatorController.loop();
     restServer.loop();
     wsPublisher.loop();
+
+    CommandRequest pendingRequest;
+    if (commandTracker.popNextPending(pendingRequest)) {
+        CommandResult result;
+        actuatorController.executeCommand(pendingRequest, result);
+        commandTracker.recordFinalResult(result);
+
+        std::vector<DeviceModel> devices = deviceRegistry.buildDevices(sensorCollector.getAvailability(),
+                                                                       telemetryCache.getLatest(),
+                                                                       actuatorController.getSnapshots());
+        wsPublisher.publishCommandResult(result);
+        wsPublisher.publishDeviceStatus(devices);
+    }
 
     unsigned long now = millis();
     if (now - lastSampleAt >= SENSOR_READ_INTERVAL) {

@@ -5,26 +5,35 @@
 #include <vector>
 #include "core/gateway_models.h"
 
+enum CommandDuplicateStatus {
+    COMMAND_NOT_FOUND = 0,
+    COMMAND_DUPLICATE_SAME = 1,
+    COMMAND_DUPLICATE_CONFLICT = 2
+};
+
 class CommandTracker {
 private:
     struct Entry {
-        String requestId;
-        String deviceId;
+        CommandRequest request;
         String status;
         CommandResult finalResult;
         unsigned long createdAtMs;
     };
 
     std::vector<Entry> entries;
+    std::vector<CommandRequest> pendingRequests;
 
     void pruneExpired();
+    bool sameParams(const CommandRequest& left, const CommandRequest& right) const;
 
 public:
     CommandTracker();
-    bool hasRequest(const String& requestId) const;
+    CommandDuplicateStatus checkDuplicate(const CommandRequest& request) const;
     bool getResult(const String& requestId, CommandResult& result) const;
-    void recordAccepted(const String& requestId, const String& deviceId);
+    bool getAccepted(const String& requestId, CommandRequest& request) const;
+    void recordAccepted(const CommandRequest& request);
     void recordFinalResult(const CommandResult& result);
+    bool popNextPending(CommandRequest& request);
 };
 
 #endif // COMMAND_TRACKER_H

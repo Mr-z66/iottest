@@ -44,7 +44,6 @@
 - `GATEWAY_ID`
 - `FIRMWARE_VERSION`
 - `GATEWAY_HTTP_PORT`
-- `GATEWAY_WS_PORT`
 - `PUMP_RELAY_PIN`
 - `GROW_LIGHT_RELAY_PIN`
 
@@ -108,7 +107,7 @@
 默认端口：
 
 - HTTP：`8080`
-- WebSocket：`8081`
+- WebSocket：同端口路径 `/ws`
 
 ### 4.1 `GET /gateway/status`
 
@@ -124,6 +123,8 @@
 - `humidity`
 - `light`
 - `co2`
+- `eco2`
+- `tvoc`
 - `soilMoisture`
 - `timestamp`
 
@@ -166,8 +167,11 @@
 
 说明：
 
-- 当前实现使用独立 WebSocket 端口
-- 后续如果需要严格做到同端口 `/ws`，可以再继续调整服务实现
+- 当前实现使用同端口 WebSocket 路径：
+
+```text
+ws://<esp-ip>:8080/ws
+```
 
 ## 6. 联调建议顺序
 
@@ -206,11 +210,16 @@ POST /devices/growlight-001/command
 GET /commands/cmd-test-0001
 ```
 
+说明：
+
+- 当前命令处理已调整为“先 accepted，再异步执行”
+- 如果设备不存在、命令不支持、参数非法，会直接返回错误，不再伪装成 accepted
+
 ## 7. 当前版本的已知说明
 
 - 当前已经能联调主板侧核心接口
-- `co2` 实际来自 SGP30 的 eCO2 读数
-- 当前 WebSocket 使用独立端口，不是同端口 `/ws`
+- `co2` 当前兼容返回，语义上对应 SGP30 的 `eCO2`
+- 同时也会返回 `eco2` 字段，便于上层按更准确语义解析
 - 本机当前环境缺少 `pio` 命令，所以仓库内代码尚未在这里完成编译验证
 
 ## 8. 后续还可以继续补的点

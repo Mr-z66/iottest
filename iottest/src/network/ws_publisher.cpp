@@ -2,27 +2,50 @@
 
 #include <ArduinoJson.h>
 
-WsPublisher::WsPublisher(uint16_t port) : webSocket(port) {
+WsPublisher::WsPublisher() : webSocket(nullptr), lastHeartbeatAt(0) {
+}
+
+void WsPublisher::attach(AsyncWebSocket* socket) {
+    webSocket = socket;
 }
 
 void WsPublisher::begin() {
-    webSocket.begin();
+    lastHeartbeatAt = millis();
 }
 
 void WsPublisher::loop() {
-    webSocket.loop();
+    if (webSocket == nullptr) {
+        return;
+    }
+
+    webSocket->cleanupClients();
+
+    unsigned long now = millis();
+    if (now - lastHeartbeatAt >= 15000UL) {
+        webSocket->pingAll();
+        lastHeartbeatAt = now;
+    }
 }
 
 void WsPublisher::publishTelemetry(const TelemetrySnapshot& telemetry) {
-    webSocket.broadcastTXT(buildTelemetryPayload(telemetry));
+    if (webSocket == nullptr) {
+        return;
+    }
+    webSocket->textAll(buildTelemetryPayload(telemetry));
 }
 
 void WsPublisher::publishDeviceStatus(const std::vector<DeviceModel>& devices) {
-    webSocket.broadcastTXT(buildDeviceStatusPayload(devices));
+    if (webSocket == nullptr) {
+        return;
+    }
+    webSocket->textAll(buildDeviceStatusPayload(devices));
 }
 
 void WsPublisher::publishCommandResult(const CommandResult& result) {
-    webSocket.broadcastTXT(buildCommandResultPayload(result));
+    if (webSocket == nullptr) {
+        return;
+    }
+    webSocket->textAll(buildCommandResultPayload(result));
 }
 
 String WsPublisher::buildTelemetryPayload(const TelemetrySnapshot& telemetry) const {
@@ -35,10 +58,12 @@ String WsPublisher::buildTelemetryPayload(const TelemetrySnapshot& telemetry) co
     if (telemetry.hasTemperature) data["temperature"] = telemetry.temperature;
     if (telemetry.hasHumidity) data["humidity"] = telemetry.humidity;
     if (telemetry.hasLight) data["light"] = telemetry.light;
-    if (telemetry.hasCo2) data["co2"] = telemetry.co2;
+    if (telemetry.hasCo2) {
+        data["co2"] = telemetry.co2;
+        data["eco2"] = telemetry.co2;
+    }
+    if (telemetry.hasTvoc) data["tvoc"] = telemetry.tvoc;
     if (telemetry.hasSoilMoisture) data["soilMoisture"] = telemetry.soilMoisture;
-    if (telemetry.hasRainDetected) data["rainDetected"] = telemetry.rainDetected;
-    if (telemetry.hasMotionDetected) data["motionDetected"] = telemetry.motionDetected;
 
     String payload;
     serializeJson(doc, payload);

@@ -19,6 +19,7 @@ private:
     void writeGrowLight(bool on);
     void updateTimestamp(ActuatorStatusSnapshot& actuator);
     ActuatorStatusSnapshot* findActuator(const String& deviceId);
+    const ActuatorStatusSnapshot* findActuator(const String& deviceId) const;
 
 public:
     ActuatorController();
@@ -26,6 +27,7 @@ public:
     void loop();
     std::vector<ActuatorStatusSnapshot> getSnapshots() const;
     bool hasDevice(const String& deviceId) const;
+    bool validateCommand(const CommandRequest& request, String& errorMessage) const;
     bool executeCommand(const CommandRequest& request, CommandResult& result);
 };
 
