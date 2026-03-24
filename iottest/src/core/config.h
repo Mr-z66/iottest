@@ -57,4 +57,7 @@
 #define TELEMETRY_PUSH_INTERVAL_MS 5000
 #define I2C_SCAN_ENABLED false
 
+// Mock data mode for testing (set to false for real sensors)
+#define USE_MOCK_DATA true
+
 #endif // CONFIG_H

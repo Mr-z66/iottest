@@ -5,6 +5,10 @@
 #include "sensors/sgp30_sensor.h"
 #include "core/time_utils.h"
 
+#if USE_MOCK_DATA
+#include <random>
+#endif
+
 SensorCollector::SensorCollector()
     : availability(),
       hw390Sensor(SOIL_MOISTURE_PIN),
@@ -15,6 +19,17 @@ SensorCollector::SensorCollector()
 }
 
 void SensorCollector::begin() {
+#if USE_MOCK_DATA
+    // Mock mode: all sensors are available without hardware init
+    availability.dht11 = true;
+    availability.sgp30 = true;
+    availability.hw390 = true;
+    availability.ds18b20 = true;
+    availability.rain = true;
+    availability.pir = true;
+    availability.gy302 = true;
+#else
+    // Real mode: initialize hardware sensors
     availability.dht11 = (initDHT11() == SENSOR_OK);
     availability.sgp30 = (initSGP30() == SENSOR_OK);
     availability.hw390 = (initHW390() == SENSOR_OK);
@@ -22,12 +37,57 @@ void SensorCollector::begin() {
     availability.rain = rainSensor.begin();
     availability.pir = (pirSensor.begin() == SENSOR_OK);
     availability.gy302 = (gy302Sensor.begin() == SENSOR_OK);
+#endif
 }
 
 bool SensorCollector::sample(TelemetrySnapshot& snapshot) {
     snapshot = TelemetrySnapshot();
     snapshot.timestamp = TimeUtils::iso8601Now();
 
+#if USE_MOCK_DATA
+    // Mock data mode - generate simulated sensor values
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::uniform_real_distribution<float> tempDist(20.0f, 30.0f);
+    static std::uniform_real_distribution<float> humDist(40.0f, 70.0f);
+    static std::uniform_real_distribution<float> soilMoistDist(30.0f, 80.0f);
+    static std::uniform_real_distribution<float> soilTempDist(18.0f, 25.0f);
+    static std::uniform_real_distribution<float> lightDist(100.0f, 2000.0f);
+    static std::uniform_int_distribution<uint16_t> co2Dist(400, 1000);
+    static std::uniform_int_distribution<uint16_t> tvocDist(10, 200);
+    static std::uniform_int_distribution<int> boolDist(0, 1);
+
+    snapshot.hasTemperature = true;
+    snapshot.temperature = tempDist(gen);
+    snapshot.hasHumidity = true;
+    snapshot.humidity = humDist(gen);
+    snapshot.hasSoilMoisture = true;
+    snapshot.soilMoisture = soilMoistDist(gen);
+    snapshot.hasSoilTemperature = true;
+    snapshot.soilTemperature = soilTempDist(gen);
+    snapshot.hasLight = true;
+    snapshot.light = lightDist(gen);
+    snapshot.hasCo2 = true;
+    snapshot.co2 = co2Dist(gen);
+    snapshot.hasTvoc = true;
+    snapshot.tvoc = tvocDist(gen);
+    snapshot.hasRainDetected = true;
+    snapshot.rainDetected = boolDist(gen) == 1;
+    snapshot.hasMotionDetected = true;
+    snapshot.motionDetected = boolDist(gen) == 1;
+
+    // All sensors are "available" in mock mode
+    availability.dht11 = true;
+    availability.sgp30 = true;
+    availability.hw390 = true;
+    availability.ds18b20 = true;
+    availability.rain = true;
+    availability.pir = true;
+    availability.gy302 = true;
+
+    return true;
+#else
+    // Real sensor reading mode
     if (availability.dht11) {
         float humidity = 0.0f;
         float temperature = 0.0f;
@@ -80,6 +140,7 @@ bool SensorCollector::sample(TelemetrySnapshot& snapshot) {
     }
 
     return true;
+#endif
 }
 
 SensorAvailabilitySnapshot SensorCollector::getAvailability() const {
